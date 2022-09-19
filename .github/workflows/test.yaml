@@ -35,6 +35,12 @@ jobs:
         with:
           command: build
 
+      - name: fuzz tests
+        run: |
+          ./run.sh
+        working-directory: utils/buffer/fuzz
+
+
       - name: interop-test
         run: |
           if [ ${{ matrix.os }} == "ubuntu-latest" ]; then
@@ -72,4 +78,5 @@ jobs:
         with:
           command: run
           args: --bin ping_pong_without_noise -- 10
+
 
