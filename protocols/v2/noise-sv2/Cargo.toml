@@ -20,3 +20,6 @@ rand = "0.7.3"
 const_sv2 = {version = "0.1.*", path = "../../../protocols/v2/const-sv2"}
 buffer_sv2 = {version = "0.1.*", path = "../../../utils/buffer"}
 binary_sv2 = { version = "0.1.3", path = "../../../protocols/v2/binary-sv2/binary-sv2" }
+
+# Because lots of other crates depend on log 0.4.x let's just defer to their version - when I tried latest (0.4.17) it failed to compile
+log = "0.4"
