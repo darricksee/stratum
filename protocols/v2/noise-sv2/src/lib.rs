@@ -11,12 +11,12 @@ use binary_sv2::{from_bytes, to_bytes};
 use bytes::Bytes;
 use core::{convert::TryFrom, time::Duration};
 pub use error::{Error, Result};
+use log::{debug, info};
 use negotiation::{EncryptionAlgorithm, NegotiationMessage, NoiseParamsBuilder};
 use snow::{params::NoiseParams, Builder, HandshakeState, TransportState};
 // Export for use in `codec_sv2::error::Error::SnowError`
 pub use snow::Error as NoiseSv2SnowError;
 use std::fmt;
-use log::{debug, info};
 
 pub use auth::{SignatureNoiseMessage, SignedPartHeader};
 pub use formats::Certificate;
