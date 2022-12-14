@@ -13,6 +13,7 @@ use roles_logic_sv2::{
     utils::Mutex,
 };
 use std::{net::SocketAddr, ops::Div, sync::Arc};
+use async_std::task::JoinHandle;
 use v1::{
     client_to_server, json_rpc, server_to_client,
     utils::{HexBytes, HexU32Be},
@@ -224,36 +225,39 @@ impl Downstream {
 
     /// Accept connections from one or more SV1 Downstream roles (SV1 Mining Devices) and create a
     /// new `Downstream` for each connection.
-    pub async fn accept_connections(
+    pub fn accept_connections(
         downstream_addr: SocketAddr,
         tx_sv1_submit: Sender<(v1::client_to_server::Submit, ExtendedExtranonce)>,
         receiver_mining_notify: Receiver<server_to_client::Notify>,
         mut extended_extranonce: ExtendedExtranonce,
         last_notify: Arc<Mutex<Option<server_to_client::Notify>>>,
         target: Arc<Mutex<Vec<u8>>>,
-    ) {
-        let downstream_listener = TcpListener::bind(downstream_addr).await.unwrap();
-        let mut downstream_incoming = downstream_listener.incoming();
-        while let Some(stream) = downstream_incoming.next().await {
-            let stream = stream.expect("Err on SV1 Downstream connection stream");
-            extended_extranonce.next_extended(0).unwrap();
-            let extended_extranonce = extended_extranonce.clone();
-            info!(
+    ) -> JoinHandle<()> {
+        task::spawn(async move {
+            let downstream_listener = TcpListener::bind(downstream_addr).await.unwrap();
+            let mut downstream_incoming = downstream_listener.incoming();
+
+            while let Some(stream) = downstream_incoming.next().await {
+                let stream = stream.expect("Err on SV1 Downstream connection stream");
+                extended_extranonce.next_extended(0).unwrap();
+                let extended_extranonce = extended_extranonce.clone();
+                info!(
                 "PROXY SERVER - ACCEPTING FROM DOWNSTREAM: {}",
                 stream.peer_addr().unwrap()
             );
-            let server = Downstream::new(
-                stream,
-                tx_sv1_submit.clone(),
-                receiver_mining_notify.clone(),
-                extended_extranonce,
-                last_notify.clone(),
-                target.clone(),
-            )
-            .await
-            .unwrap();
-            Arc::new(Mutex::new(server));
-        }
+                let server = Downstream::new(
+                    stream,
+                    tx_sv1_submit.clone(),
+                    receiver_mining_notify.clone(),
+                    extended_extranonce,
+                    last_notify.clone(),
+                    target.clone(),
+                )
+                    .await
+                    .unwrap();
+                Arc::new(Mutex::new(server));
+            }
+        })
     }
 
     /// As SV1 messages come in, determines if the message response needs to be translated to SV2

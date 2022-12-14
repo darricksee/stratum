@@ -26,6 +26,7 @@ pub enum Error {
     UnexpectedPoolMessage,
     UnknownRequestId(u32),
     NoMoreExtranonces,
+    InvalidExtranonceSize(u16, u16),
 }
 
 impl From<BinarySv2Error> for Error {
@@ -81,6 +82,9 @@ impl Display for Error {
                 id
             ),
             NoMoreExtranonces => write!(f, "No more extranonces"),
+            InvalidExtranonceSize(required_min, requested) => {
+                write!(f, "Invalid extranonce size: required min {}, requested {}", required_min, requested)
+            }
         }
     }
 }

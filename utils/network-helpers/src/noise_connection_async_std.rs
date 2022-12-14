@@ -60,12 +60,10 @@ impl Connection {
                         let mut connection = cloned1.lock().await;
                         if let Ok(x) = decoder.next_frame(&mut connection.state) {
                             sender_incoming.send(x).await.unwrap();
-                        } else {
-                            error!("Failed to decode noise frame!");
                         }
                     }
                     Err(e) => {
-                        println!("{:#?}", e);
+                        error!("Shutting down noise stream reader! {:#?}", e);
                         let _ = reader.shutdown(async_std::net::Shutdown::Both);
                         break;
                     }

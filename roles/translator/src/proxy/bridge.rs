@@ -5,6 +5,7 @@ use roles_logic_sv2::{
     utils::{Id, Mutex},
 };
 use std::{collections::HashMap, sync::Arc};
+use async_std::task::JoinHandle;
 use v1::{client_to_server::Submit, server_to_client};
 
 use super::next_mining_notify::NextMiningNotify;
@@ -81,30 +82,31 @@ impl Bridge {
 
     /// Starts the tasks that receive SV1 and SV2 messages to be translated and sent to their
     /// respective roles.
-    pub fn start(self) {
+    pub fn start(self, join_handles: &mut Vec<JoinHandle<()>>) {
         let self_ = Arc::new(Mutex::new(self));
-        Self::handle_new_prev_hash(self_.clone());
-        Self::handle_new_extended_mining_job(self_.clone());
-        Self::handle_downstream_share_submission(self_);
+        join_handles.push(Self::handle_new_prev_hash(self_.clone()));
+        join_handles.push(Self::handle_new_extended_mining_job(self_.clone()));
+        join_handles.push(Self::handle_downstream_share_submission(self_));
     }
 
     /// Receives a SV1 `mining.submit` message from the `Downstream`, translates it to a SV2
     /// `SubmitSharesExtended` message, and sends it to the `Upstream`.
-    fn handle_downstream_share_submission(self_: Arc<Mutex<Self>>) {
+    fn handle_downstream_share_submission(self_: Arc<Mutex<Self>>) -> JoinHandle<()> {
         let rx_sv1_submit = self_.safe_lock(|s| s.rx_sv1_submit.clone()).unwrap();
         let tx_sv2_submit_shares_ext = self_
             .safe_lock(|s| s.tx_sv2_submit_shares_ext.clone())
             .unwrap();
+        debug!("Starting handle_downstream_share_submission task");
         task::spawn(async move {
             loop {
-                let (sv1_submit, extrnonce) = rx_sv1_submit.clone().recv().await.unwrap();
+                let (sv1_submit, extranonce) = rx_sv1_submit.clone().recv().await.unwrap();
                 let channel_sequence_id =
                     self_.safe_lock(|s| s.channel_sequence_id.next()).unwrap() - 1;
                 let sv2_submit: SubmitSharesExtended =
-                    Self::translate_submit(channel_sequence_id, sv1_submit, &extrnonce).unwrap();
+                    Self::translate_submit(channel_sequence_id, sv1_submit, &extranonce).unwrap();
                 tx_sv2_submit_shares_ext.send(sv2_submit).await.unwrap();
             }
-        });
+        })
     }
 
     /// Translates a SV1 `mining.submit` message to a SV2 `SubmitSharesExtended` message.
@@ -140,7 +142,8 @@ impl Bridge {
     /// that before every received `SetNewPrevHash`, a `NewExtendedMiningJob` with a
     /// corresponding `job_id` has already been received. If this is not the case, an error has
     /// occurred on the Upstream pool role and the connection will close.
-    fn handle_new_prev_hash(self_: Arc<Mutex<Self>>) {
+    fn handle_new_prev_hash(self_: Arc<Mutex<Self>>) -> JoinHandle<()> {
+        debug!("Starting handle_new_prev_hash task");
         task::spawn(async move {
             loop {
                 // Receive `SetNewPrevHash` from `Upstream`
@@ -236,7 +239,7 @@ impl Bridge {
                     panic!("NewExtendedMiningJob and SetNewPrevHash job ids mismatch");
                 }
             }
-        });
+        })
     }
 
     /// Receives a SV2 `NewExtendedMiningJob` message from the `Upstream`. If `future_job=true`,
@@ -247,7 +250,8 @@ impl Bridge {
     /// `Downstream`. If `future_job=false` but this job's `job_id` does not match the current SV2
     /// `SetNewPrevHash` `job_id`, an error has occurred on the Upstream pool role and the
     /// connection will close.
-    fn handle_new_extended_mining_job(self_: Arc<Mutex<Self>>) {
+    fn handle_new_extended_mining_job(self_: Arc<Mutex<Self>>) -> JoinHandle<()> {
+        debug!("Starting handle_new_extended_mining_job task");
         task::spawn(async move {
             loop {
                 // Receive `NewExtendedMiningJob` from `Upstream`
@@ -329,10 +333,10 @@ impl Bridge {
                             .unwrap();
                     } else {
                         error!("NewExtendedMiningJob and SetNewPrevHash job ids mismatch");
-                        panic!("NewExtendedMiningJob and SetNewPrevHash job ids mismatch");
+                        //panic!("NewExtendedMiningJob and SetNewPrevHash job ids mismatch");
                     }
                 }
             }
-        });
+        })
     }
 }
