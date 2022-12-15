@@ -378,7 +378,10 @@ impl Upstream {
                             state: State::Shutdown(RolesSv2Logic(e)),
                             component: Component::Upstream,
                         };
-                        error!("TERMINATING: Error handling pool role message: {:?}", status);
+                        error!(
+                            "TERMINATING: Error handling pool role message: {:?}",
+                            status
+                        );
                         let _ = tx_status.send(status).await;
                         break;
                     }
