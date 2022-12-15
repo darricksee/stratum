@@ -1,6 +1,6 @@
 use crate::{
     downstream_sv1::Downstream,
-    error::Error::{BadCliArgs, CodecNoise, RolesSv2Logic},
+    error::Error::{CodecNoise, RolesSv2Logic},
     status::{Component, State, Status},
     upstream_sv2::{EitherFrame, Message, StdFrame, UpstreamConnection},
     ProxyResult,
@@ -29,6 +29,7 @@ use roles_logic_sv2::{
     routing_logic::{CommonRoutingLogic, MiningRoutingLogic, NoRouting},
     selectors::NullDownstreamMiningSelector,
     utils::{get_target, Mutex},
+    Error,
 };
 use std::{net::SocketAddr, sync::Arc, thread::sleep, time::Duration};
 use tracing::{debug, error, info, trace, warn};
@@ -389,7 +390,7 @@ impl Upstream {
 
     /// Receives a new SV2 `SubmitSharesExtended` message, checks that the submission target meets
     /// the expected (TODO), and sends to the Upstream role.
-    pub fn handle_submit(self_: Arc<Mutex<Self>>, sender: Sender<Status>) {
+    pub fn handle_submit(self_: Arc<Mutex<Self>>, _tx_status: Sender<Status>) {
         // TODO
         // check if submit meet the upstream target and if so send back (upstream target will
         // likely be not the same of downstream target)

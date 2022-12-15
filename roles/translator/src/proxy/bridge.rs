@@ -85,12 +85,12 @@ impl Bridge {
         let self_ = Arc::new(Mutex::new(self));
         Self::handle_new_prev_hash(self_.clone(), tx_status.clone());
         Self::handle_new_extended_mining_job(self_.clone(), tx_status.clone());
-        Self::handle_downstream_share_submission(self_.clone(), tx_status.clone());
+        Self::handle_downstream_share_submission(self_, tx_status);
     }
 
     /// Receives a SV1 `mining.submit` message from the `Downstream`, translates it to a SV2
     /// `SubmitSharesExtended` message, and sends it to the `Upstream`.
-    fn handle_downstream_share_submission(self_: Arc<Mutex<Self>>, tx_status: Sender<Status>) {
+    fn handle_downstream_share_submission(self_: Arc<Mutex<Self>>, _tx_status: Sender<Status>) {
         let rx_sv1_submit = self_.safe_lock(|s| s.rx_sv1_submit.clone()).unwrap();
         let tx_sv2_submit_shares_ext = self_
             .safe_lock(|s| s.tx_sv2_submit_shares_ext.clone())
@@ -141,7 +141,7 @@ impl Bridge {
     /// that before every received `SetNewPrevHash`, a `NewExtendedMiningJob` with a
     /// corresponding `job_id` has already been received. If this is not the case, an error has
     /// occurred on the Upstream pool role and the connection will close.
-    fn handle_new_prev_hash(self_: Arc<Mutex<Self>>, tx_status: Sender<Status>) {
+    fn handle_new_prev_hash(self_: Arc<Mutex<Self>>, _tx_status: Sender<Status>) {
         debug!("Starting handle_new_prev_hash task");
         task::spawn(async move {
             loop {
@@ -249,7 +249,7 @@ impl Bridge {
     /// `Downstream`. If `future_job=false` but this job's `job_id` does not match the current SV2
     /// `SetNewPrevHash` `job_id`, an error has occurred on the Upstream pool role and the
     /// connection will close.
-    fn handle_new_extended_mining_job(self_: Arc<Mutex<Self>>, tx_status: Sender<Status>) {
+    fn handle_new_extended_mining_job(self_: Arc<Mutex<Self>>, _tx_status: Sender<Status>) {
         debug!("Starting handle_new_extended_mining_job task");
         task::spawn(async move {
             loop {

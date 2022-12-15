@@ -1,5 +1,4 @@
 use crate::error::Error;
-use std::fmt;
 
 #[derive(Debug)]
 pub enum State {
