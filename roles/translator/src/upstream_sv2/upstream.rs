@@ -1,6 +1,6 @@
 use crate::{
     downstream_sv1::Downstream,
-    error::Error::{CodecNoise, UpstreamIncomingError},
+    error::Error::{CodecNoise, UpstreamIncoming},
     status::{State, Status},
     upstream_sv2::{EitherFrame, Message, StdFrame, UpstreamConnection},
     ProxyResult,
@@ -373,7 +373,7 @@ impl Upstream {
                     Ok(_) => panic!(),
                     Err(e) => {
                         let status = Status {
-                            state: State::Shutdown(UpstreamIncomingError(e)),
+                            state: State::Shutdown(UpstreamIncoming(e)),
                         };
                         error!(
                             "TERMINATING: Error handling pool role message: {:?}",
