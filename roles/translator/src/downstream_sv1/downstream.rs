@@ -1,5 +1,6 @@
 use crate::{downstream_sv1, ProxyResult};
 use async_channel::{bounded, Receiver, Sender};
+use async_std::task::JoinHandle;
 use async_std::{
     io::BufReader,
     net::{TcpListener, TcpStream},
@@ -13,13 +14,13 @@ use roles_logic_sv2::{
     utils::Mutex,
 };
 use std::{net::SocketAddr, ops::Div, sync::Arc};
-use async_std::task::JoinHandle;
 use v1::{
     client_to_server, json_rpc, server_to_client,
     utils::{HexBytes, HexU32Be},
     IsServer,
 };
 
+use crate::status::Status;
 use tracing::{debug, info};
 
 /// Handles the sending and receiving of messages to and from an SV2 Upstream role (most typically
@@ -232,6 +233,7 @@ impl Downstream {
         mut extended_extranonce: ExtendedExtranonce,
         last_notify: Arc<Mutex<Option<server_to_client::Notify>>>,
         target: Arc<Mutex<Vec<u8>>>,
+        tx_status: Sender<Status>,
     ) -> JoinHandle<()> {
         task::spawn(async move {
             let downstream_listener = TcpListener::bind(downstream_addr).await.unwrap();
@@ -242,9 +244,9 @@ impl Downstream {
                 extended_extranonce.next_extended(0).unwrap();
                 let extended_extranonce = extended_extranonce.clone();
                 info!(
-                "PROXY SERVER - ACCEPTING FROM DOWNSTREAM: {}",
-                stream.peer_addr().unwrap()
-            );
+                    "PROXY SERVER - ACCEPTING FROM DOWNSTREAM: {}",
+                    stream.peer_addr().unwrap()
+                );
                 let server = Downstream::new(
                     stream,
                     tx_sv1_submit.clone(),
@@ -253,8 +255,8 @@ impl Downstream {
                     last_notify.clone(),
                     target.clone(),
                 )
-                    .await
-                    .unwrap();
+                .await
+                .unwrap();
                 Arc::new(Mutex::new(server));
             }
         })

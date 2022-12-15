@@ -3,6 +3,7 @@ mod downstream_sv1;
 mod error;
 mod proxy;
 mod proxy_config;
+mod status;
 mod upstream_sv2;
 use args::Args;
 use error::{Error, ProxyResult};
@@ -15,19 +16,15 @@ const SELF_EXTRNONCE_LEN: usize = 2;
 use async_channel::{bounded, unbounded, Receiver, Sender};
 use std::{
     net::{IpAddr, SocketAddr},
-    pin::Pin,
     str::FromStr,
     sync::Arc,
-    task::{Context, Poll},
-    future::Future,
 };
 
 use std::thread::sleep;
 use std::time::Duration;
-use async_std::task;
-use async_std::task::JoinHandle;
 use v1::server_to_client;
 
+use crate::status::State;
 use tracing::{debug, error, info};
 
 /// Process CLI args, if any.
@@ -49,6 +46,8 @@ async fn main() {
 
     let proxy_config = process_cli_args().unwrap();
     info!("PC: {:?}", &proxy_config);
+
+    let (tx_status, rx_status) = unbounded();
 
     // `tx_sv1_submit` sender is used by `Downstream` to send a `mining.submit` message to
     // `Bridge` via the `rx_sv1_submit` receiver
@@ -116,15 +115,12 @@ async fn main() {
         }
     }
 
-    // Create a new vec to store all the JoinHandles for the spawned tasks
-    let mut join_handles : Vec<JoinHandle<()>> = vec![];
-
     // Start receiving messages from the SV2 Upstream role
-    join_handles.push(upstream_sv2::Upstream::parse_incoming(upstream.clone()));
+    upstream_sv2::Upstream::parse_incoming(upstream.clone(), tx_status.clone());
 
     debug!("Finished starting upstream listener");
     // Start task handler to receive submits from the SV1 Downstream role once it connects
-    join_handles.push(upstream_sv2::Upstream::handle_submit(upstream.clone()));
+    upstream_sv2::Upstream::handle_submit(upstream.clone(), tx_status.clone());
 
     // Setup to store the latest SV2 `SetNewPrevHash` and `NewExtendedMiningJob` messages received
     // from the Upstream role before any Downstream role connects
@@ -141,7 +137,7 @@ async fn main() {
         tx_sv1_notify,
         last_notify.clone(),
     )
-    .start(&mut join_handles);
+    .start(tx_status.clone());
 
     // Format `Downstream` connection address
     let downstream_addr = SocketAddr::new(
@@ -162,46 +158,37 @@ async fn main() {
                 error!("Failed to receive the extended extranonce from the upstream - retrying in 1s: {}", e);
                 sleep(Duration::from_secs(1));
                 if times > 5 {
-                    panic!("Failed to receive the extended extranonce from the upstream - quitting");
+                    panic!(
+                        "Failed to receive the extended extranonce from the upstream - quitting"
+                    );
                 }
             }
         }
     };
 
     // Accept connections from one or more SV1 Downstream roles (SV1 Mining Devices)
-    join_handles.push(downstream_sv1::Downstream::accept_connections(
+    downstream_sv1::Downstream::accept_connections(
         downstream_addr,
         tx_sv1_submit,
         rx_sv1_notify,
         extended_extranonce,
         last_notify,
         target,
-    ));
+        tx_status.clone(),
+    );
 
     // Check all tasks if is_finished() is true, if so exit
     loop {
-        for mut handle in join_handles {
-            // `handle` is an `std::async::JoinHandle<T>` where `T` is the type
-            // of the value that the task will return when it completes.
-            // Call `poll` on the `JoinHandle` to check its status.
-            let poll_result = handle.poll();
+        let task_status = rx_status.recv().await.unwrap();
 
-            match poll_result {
-                // If `poll` returns `Ready`, the task associated with the
-                // `JoinHandle` has completed and the value can be accessed
-                // by calling `join` on the `JoinHandle`.
-                Poll::Ready(e) => {
-                    // if so, exit
-                    info!("Task finished, exiting");
-                    panic!("A critical error has occurred; exiting!");
-                }
-                Poll::Pending => {}
+        match task_status.state {
+            State::Shutdown(err) => {
+                error!("SHUTDOWN from {:?}: {}", task_status.component, err);
+                break;
+            }
+            State::Healthy(msg) => {
+                info!("{:?} - HEALTHY message: {}", task_status.component, msg);
             }
         }
-
-        // Sleep for 5 seconds
-        sleep(Duration::from_secs(5));
     }
-
-
 }
