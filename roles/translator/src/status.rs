@@ -7,14 +7,6 @@ pub enum State {
 }
 
 #[derive(Debug)]
-pub enum Component {
-    Bridge,
-    Upstream,
-    Downstream,
-}
-
-#[derive(Debug)]
 pub struct Status {
     pub state: State,
-    pub component: Component,
 }

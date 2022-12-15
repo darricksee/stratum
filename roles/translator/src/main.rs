@@ -183,11 +183,11 @@ async fn main() {
 
         match task_status.state {
             State::Shutdown(err) => {
-                error!("SHUTDOWN from {:?}: {}", task_status.component, err);
+                error!("SHUTDOWN from: {}", err);
                 break;
             }
             State::Healthy(msg) => {
-                info!("{:?} - HEALTHY message: {}", task_status.component, msg);
+                info!("HEALTHY message: {}", msg);
             }
         }
     }
