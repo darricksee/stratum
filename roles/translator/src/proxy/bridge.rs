@@ -8,7 +8,7 @@ use std::{collections::HashMap, sync::Arc};
 use v1::{client_to_server::Submit, server_to_client};
 
 use super::next_mining_notify::NextMiningNotify;
-use crate::{status::Status, Error, ProxyResult};
+use crate::{status::{Status, Component}, Error, ProxyResult, handle_result, };
 use tracing::{debug, error};
 
 /// Bridge between the SV2 `Upstream` and SV1 `Downstream` responsible for the following messaging
@@ -129,6 +129,10 @@ impl Bridge {
             Some(vb) => vb.0,
             None => return Err(Error::NoSv1VersionBits),
         };
+        
+        let version = handle_result!(
+            sv1_submit.version_bits.ok_or(Error::NoSv1VersionBits)
+        );
 
         Ok(SubmitSharesExtended {
             channel_id: 1,
@@ -136,7 +140,7 @@ impl Bridge {
             job_id: sv1_submit.job_id.parse::<u32>()?,
             nonce: sv1_submit.nonce.0,
             ntime: sv1_submit.time.0,
-            version,
+            version: version.0,
             extranonce: extranonce.try_into().unwrap(),
         })
     }
