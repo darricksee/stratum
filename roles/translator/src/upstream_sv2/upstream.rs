@@ -1,6 +1,6 @@
 use crate::{
     downstream_sv1::Downstream,
-    error::Error::{CodecNoise, RolesSv2Logic},
+    error::Error::{CodecNoise, RolesSv2Logic, UpstreamIncomingError},
     status::{State, Status},
     upstream_sv2::{EitherFrame, Message, StdFrame, UpstreamConnection},
     ProxyResult,
@@ -33,7 +33,6 @@ use roles_logic_sv2::{
 };
 use std::{net::SocketAddr, sync::Arc, thread::sleep, time::Duration};
 use tracing::{debug, error, info, trace, warn};
-use crate::error::Error::UpstreamIncomingError;
 
 /// Represents the currently active mining job being worked on.
 #[allow(dead_code)]
@@ -374,7 +373,7 @@ impl Upstream {
                     Ok(_) => panic!(),
                     Err(e) => {
                         let status = Status {
-                            state: State::Shutdown(UpstreamIncomingError(e))
+                            state: State::Shutdown(UpstreamIncomingError(e)),
                         };
                         error!(
                             "TERMINATING: Error handling pool role message: {:?}",
