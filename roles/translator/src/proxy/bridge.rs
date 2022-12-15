@@ -1,6 +1,5 @@
 use async_channel::{Receiver, Sender};
 use async_std::task;
-use async_std::task::JoinHandle;
 use roles_logic_sv2::{
     mining_sv2::{ExtendedExtranonce, NewExtendedMiningJob, SetNewPrevHash, SubmitSharesExtended},
     utils::{Id, Mutex},
@@ -9,8 +8,7 @@ use std::{collections::HashMap, sync::Arc};
 use v1::{client_to_server::Submit, server_to_client};
 
 use super::next_mining_notify::NextMiningNotify;
-use crate::status::Status;
-use crate::{Error, ProxyResult};
+use crate::{status::Status, Error, ProxyResult};
 use tracing::{debug, error};
 
 /// Bridge between the SV2 `Upstream` and SV1 `Downstream` responsible for the following messaging
@@ -92,10 +90,7 @@ impl Bridge {
 
     /// Receives a SV1 `mining.submit` message from the `Downstream`, translates it to a SV2
     /// `SubmitSharesExtended` message, and sends it to the `Upstream`.
-    fn handle_downstream_share_submission(
-        self_: Arc<Mutex<Self>>,
-        tx_status: Sender<Status>,
-    ) -> JoinHandle<()> {
+    fn handle_downstream_share_submission(self_: Arc<Mutex<Self>>, tx_status: Sender<Status>) {
         let rx_sv1_submit = self_.safe_lock(|s| s.rx_sv1_submit.clone()).unwrap();
         let tx_sv2_submit_shares_ext = self_
             .safe_lock(|s| s.tx_sv2_submit_shares_ext.clone())
@@ -110,7 +105,7 @@ impl Bridge {
                     Self::translate_submit(channel_sequence_id, sv1_submit, &extranonce).unwrap();
                 tx_sv2_submit_shares_ext.send(sv2_submit).await.unwrap();
             }
-        })
+        });
     }
 
     /// Translates a SV1 `mining.submit` message to a SV2 `SubmitSharesExtended` message.
@@ -146,7 +141,7 @@ impl Bridge {
     /// that before every received `SetNewPrevHash`, a `NewExtendedMiningJob` with a
     /// corresponding `job_id` has already been received. If this is not the case, an error has
     /// occurred on the Upstream pool role and the connection will close.
-    fn handle_new_prev_hash(self_: Arc<Mutex<Self>>, tx_status: Sender<Status>) -> JoinHandle<()> {
+    fn handle_new_prev_hash(self_: Arc<Mutex<Self>>, tx_status: Sender<Status>) {
         debug!("Starting handle_new_prev_hash task");
         task::spawn(async move {
             loop {
@@ -243,7 +238,7 @@ impl Bridge {
                     panic!("NewExtendedMiningJob and SetNewPrevHash job ids mismatch");
                 }
             }
-        })
+        });
     }
 
     /// Receives a SV2 `NewExtendedMiningJob` message from the `Upstream`. If `future_job=true`,
@@ -254,10 +249,7 @@ impl Bridge {
     /// `Downstream`. If `future_job=false` but this job's `job_id` does not match the current SV2
     /// `SetNewPrevHash` `job_id`, an error has occurred on the Upstream pool role and the
     /// connection will close.
-    fn handle_new_extended_mining_job(
-        self_: Arc<Mutex<Self>>,
-        tx_status: Sender<Status>,
-    ) -> JoinHandle<()> {
+    fn handle_new_extended_mining_job(self_: Arc<Mutex<Self>>, tx_status: Sender<Status>) {
         debug!("Starting handle_new_extended_mining_job task");
         task::spawn(async move {
             loop {
@@ -344,6 +336,6 @@ impl Bridge {
                     }
                 }
             }
-        })
+        });
     }
 }

@@ -1,6 +1,5 @@
 use crate::{downstream_sv1, ProxyResult};
 use async_channel::{bounded, Receiver, Sender};
-use async_std::task::JoinHandle;
 use async_std::{
     io::BufReader,
     net::{TcpListener, TcpStream},
@@ -234,7 +233,7 @@ impl Downstream {
         last_notify: Arc<Mutex<Option<server_to_client::Notify>>>,
         target: Arc<Mutex<Vec<u8>>>,
         tx_status: Sender<Status>,
-    ) -> JoinHandle<()> {
+    ) {
         task::spawn(async move {
             let downstream_listener = TcpListener::bind(downstream_addr).await.unwrap();
             let mut downstream_incoming = downstream_listener.incoming();
@@ -259,7 +258,7 @@ impl Downstream {
                 .unwrap();
                 Arc::new(Mutex::new(server));
             }
-        })
+        });
     }
 
     /// As SV1 messages come in, determines if the message response needs to be translated to SV2

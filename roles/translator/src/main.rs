@@ -18,10 +18,10 @@ use std::{
     net::{IpAddr, SocketAddr},
     str::FromStr,
     sync::Arc,
+    thread::sleep,
+    time::Duration,
 };
 
-use std::thread::sleep;
-use std::time::Duration;
 use v1::server_to_client;
 
 use crate::status::State;
