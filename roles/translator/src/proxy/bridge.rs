@@ -8,7 +8,7 @@ use std::{collections::HashMap, sync::Arc};
 use v1::{client_to_server::Submit, server_to_client};
 
 use super::next_mining_notify::NextMiningNotify;
-use crate::{status::{Status, Component}, Error, ProxyResult, handle_result, };
+use crate::{handle_result, status::Status, Error, ProxyResult};
 use tracing::{debug, error};
 
 /// Bridge between the SV2 `Upstream` and SV1 `Downstream` responsible for the following messaging
@@ -104,12 +104,17 @@ impl Bridge {
         debug!("Starting handle_downstream_share_submission task");
         task::spawn(async move {
             loop {
-                let (sv1_submit, extranonce) = rx_sv1_submit.clone().recv().await.unwrap();
+                let (sv1_submit, extranonce) =
+                    handle_result!(_tx_status, rx_sv1_submit.clone().recv().await);
                 let channel_sequence_id =
                     self_.safe_lock(|s| s.channel_sequence_id.next()).unwrap() - 1;
-                let sv2_submit: SubmitSharesExtended =
-                    Self::translate_submit(channel_sequence_id, sv1_submit, &extranonce).unwrap();
-                tx_sv2_submit_shares_ext.send(sv2_submit).await.unwrap();
+
+                let sv2_submit = handle_result!(
+                    _tx_status,
+                    Self::translate_submit(channel_sequence_id, sv1_submit, extranonce)
+                );
+
+                handle_result!(_tx_status, tx_sv2_submit_shares_ext.send(sv2_submit).await);
             }
         });
     }
@@ -118,21 +123,29 @@ impl Bridge {
     fn translate_submit(
         channel_sequence_id: u32,
         sv1_submit: Submit,
-        extranonce_1: &ExtendedExtranonce,
+        extranonce_1: ExtendedExtranonce,
     ) -> ProxyResult<'static, SubmitSharesExtended<'static>> {
-        let extranonce_vec: Vec<u8> = sv1_submit.extra_nonce2.0.to_vec();
-        let extranonce = extranonce_1
-            .without_upstream_part(Some(extranonce_vec.try_into().unwrap()))
-            .unwrap();
+        let extranonce_vec: Vec<u8> = sv1_submit.extra_nonce2.clone().into();
+        let extranonce = if let Ok(extranonce_vec) = extranonce_vec.try_into() {
+            match extranonce_1.without_upstream_part(Some(extranonce_vec)) {
+                Some(val) => val,
+                None => {
+                    return Err(Error::SubprotocolMining(
+                        "Failed to remove upstream part of extranonce".to_string(),
+                    ));
+                }
+            }
+        } else {
+            return Err(Error::SubprotocolMining(format!(
+                "Failed to convert bytes to Extranonce: bytes length = {:?}",
+                sv1_submit.extra_nonce2.len()
+            )));
+        };
 
         let version = match sv1_submit.version_bits {
             Some(vb) => vb.0,
             None => return Err(Error::NoSv1VersionBits),
         };
-        
-        let version = handle_result!(
-            sv1_submit.version_bits.ok_or(Error::NoSv1VersionBits)
-        );
 
         Ok(SubmitSharesExtended {
             channel_id: 1,
@@ -140,8 +153,8 @@ impl Bridge {
             job_id: sv1_submit.job_id.parse::<u32>()?,
             nonce: sv1_submit.nonce.0,
             ntime: sv1_submit.time.0,
-            version: version.0,
-            extranonce: extranonce.try_into().unwrap(),
+            version,
+            extranonce: extranonce.into(),
         })
     }
 
@@ -160,7 +173,7 @@ impl Bridge {
                     .safe_lock(|r| r.rx_sv2_set_new_prev_hash.clone())
                     .unwrap();
                 let sv2_set_new_prev_hash: SetNewPrevHash =
-                    rx_sv2_set_new_prev_hash.clone().recv().await.unwrap();
+                    handle_result!(_tx_status, rx_sv2_set_new_prev_hash.clone().recv().await);
                 debug!(
                     "handle_new_prev_hash job_id: {:?}",
                     &sv2_set_new_prev_hash.job_id
@@ -210,6 +223,7 @@ impl Bridge {
                             .unwrap()
                     })
                     .unwrap();
+
                 debug!(
                     "handle_new_prev_hash mining.notify to send: {:?}",
                     &sv1_notify_msg
@@ -233,7 +247,7 @@ impl Bridge {
                             let _ = s.insert(msg.clone());
                         })
                         .unwrap();
-                    tx_sv1_notify.send(msg).await.unwrap();
+                    handle_result!(_tx_status, tx_sv1_notify.send(msg).await);
 
                     // Flush stale jobs from job_mapper (aka retain all values greater than
                     // this job_id)
@@ -259,7 +273,14 @@ impl Bridge {
     /// `Downstream`. If `future_job=false` but this job's `job_id` does not match the current SV2
     /// `SetNewPrevHash` `job_id`, an error has occurred on the Upstream pool role and the
     /// connection will close.
+<<<<<<< HEAD
     fn handle_new_extended_mining_job(self_: Arc<Mutex<Self>>) {
+=======
+    fn handle_new_extended_mining_job(
+        self_: Arc<Mutex<Self>>,
+        _tx_status: Sender<Status<'static>>,
+    ) {
+>>>>>>> c411d1a (bridge Sender<Status> handling)
         debug!("Starting handle_new_extended_mining_job task");
         task::spawn(async move {
             loop {
@@ -268,7 +289,8 @@ impl Bridge {
                     .safe_lock(|r| r.rx_sv2_new_ext_mining_job.clone())
                     .unwrap();
                 let sv2_new_extended_mining_job: NewExtendedMiningJob =
-                    rx_sv2_new_ext_mining_job.clone().recv().await.unwrap();
+                    handle_result!(_tx_status, rx_sv2_new_ext_mining_job.clone().recv().await);
+
                 debug!(
                     "handle_new_extended_mining_job job_id: {:?}",
                     &sv2_new_extended_mining_job.job_id
@@ -330,7 +352,8 @@ impl Bridge {
                                 let _ = s.insert(msg.clone());
                             })
                             .unwrap();
-                        tx_sv1_notify.send(msg).await.unwrap();
+
+                        handle_result!(_tx_status, tx_sv1_notify.send(msg).await);
 
                         // Flush stale jobs from job_mapper (aka retain all values greater than
                         // this job_id)
