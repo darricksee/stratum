@@ -97,24 +97,29 @@ impl Bridge {
     /// Receives a SV1 `mining.submit` message from the `Downstream`, translates it to a SV2
     /// `SubmitSharesExtended` message, and sends it to the `Upstream`.
     fn handle_downstream_share_submission(self_: Arc<Mutex<Self>>) {
-        let rx_sv1_submit = self_.safe_lock(|s| s.rx_sv1_submit.clone()).unwrap();
-        let tx_sv2_submit_shares_ext = self_
-            .safe_lock(|s| s.tx_sv2_submit_shares_ext.clone())
+        let (rx_sv1_submit, tx_sv2_submit_shares_ext, tx_status) = self_
+            .safe_lock(|s| {
+                (
+                    s.rx_sv1_submit.clone(),
+                    s.tx_sv2_submit_shares_ext.clone(),
+                    s.tx_status.clone(),
+                )
+            })
             .unwrap();
         debug!("Starting handle_downstream_share_submission task");
         task::spawn(async move {
             loop {
                 let (sv1_submit, extranonce) =
-                    handle_result!(_tx_status, rx_sv1_submit.clone().recv().await);
+                    handle_result!(tx_status, rx_sv1_submit.clone().recv().await);
                 let channel_sequence_id =
                     self_.safe_lock(|s| s.channel_sequence_id.next()).unwrap() - 1;
 
                 let sv2_submit = handle_result!(
-                    _tx_status,
+                    tx_status,
                     Self::translate_submit(channel_sequence_id, sv1_submit, extranonce)
                 );
 
-                handle_result!(_tx_status, tx_sv2_submit_shares_ext.send(sv2_submit).await);
+                handle_result!(tx_status, tx_sv2_submit_shares_ext.send(sv2_submit).await);
             }
         });
     }
@@ -169,11 +174,11 @@ impl Bridge {
         task::spawn(async move {
             loop {
                 // Receive `SetNewPrevHash` from `Upstream`
-                let rx_sv2_set_new_prev_hash = self_
-                    .safe_lock(|r| r.rx_sv2_set_new_prev_hash.clone())
+                let (rx_sv2_set_new_prev_hash, tx_status) = self_
+                    .safe_lock(|r| (r.rx_sv2_set_new_prev_hash.clone(), r.tx_status.clone()))
                     .unwrap();
                 let sv2_set_new_prev_hash: SetNewPrevHash =
-                    handle_result!(_tx_status, rx_sv2_set_new_prev_hash.clone().recv().await);
+                    handle_result!(tx_status, rx_sv2_set_new_prev_hash.clone().recv().await);
                 debug!(
                     "handle_new_prev_hash job_id: {:?}",
                     &sv2_set_new_prev_hash.job_id
@@ -241,13 +246,15 @@ impl Bridge {
                     // `last_notify` logic here is only relevant for SV2 `SetNewPrevHash` and
                     // `NewExtendedMiningJob` messages received **before** a Downstream role
                     // connects
-                    let last_notify = self_.safe_lock(|s| s.last_notify.clone()).unwrap();
+                    let (last_notify, tx_status) = self_
+                        .safe_lock(|s| (s.last_notify.clone(), s.tx_status.clone()))
+                        .unwrap();
                     last_notify
                         .safe_lock(|s| {
                             let _ = s.insert(msg.clone());
                         })
                         .unwrap();
-                    handle_result!(_tx_status, tx_sv1_notify.send(msg).await);
+                    handle_result!(tx_status, tx_sv1_notify.send(msg).await);
 
                     // Flush stale jobs from job_mapper (aka retain all values greater than
                     // this job_id)
@@ -273,23 +280,16 @@ impl Bridge {
     /// `Downstream`. If `future_job=false` but this job's `job_id` does not match the current SV2
     /// `SetNewPrevHash` `job_id`, an error has occurred on the Upstream pool role and the
     /// connection will close.
-<<<<<<< HEAD
     fn handle_new_extended_mining_job(self_: Arc<Mutex<Self>>) {
-=======
-    fn handle_new_extended_mining_job(
-        self_: Arc<Mutex<Self>>,
-        _tx_status: Sender<Status<'static>>,
-    ) {
->>>>>>> c411d1a (bridge Sender<Status> handling)
         debug!("Starting handle_new_extended_mining_job task");
         task::spawn(async move {
             loop {
                 // Receive `NewExtendedMiningJob` from `Upstream`
-                let rx_sv2_new_ext_mining_job = self_
-                    .safe_lock(|r| r.rx_sv2_new_ext_mining_job.clone())
+                let (rx_sv2_new_ext_mining_job, tx_status) = self_
+                    .safe_lock(|r| (r.rx_sv2_new_ext_mining_job.clone(), r.tx_status.clone()))
                     .unwrap();
                 let sv2_new_extended_mining_job: NewExtendedMiningJob =
-                    handle_result!(_tx_status, rx_sv2_new_ext_mining_job.clone().recv().await);
+                    handle_result!(tx_status, rx_sv2_new_ext_mining_job.clone().recv().await);
 
                 debug!(
                     "handle_new_extended_mining_job job_id: {:?}",
@@ -346,14 +346,16 @@ impl Bridge {
                             "handle_new_extended_mining_job sending mining.notify to Downstream"
                         );
                         // TODO: handle the last_notify using the job_mapper instead
-                        let last_notify = self_.safe_lock(|s| s.last_notify.clone()).unwrap();
+                        let (last_notify, tx_status) = self_
+                            .safe_lock(|s| (s.last_notify.clone(), s.tx_status.clone()))
+                            .unwrap();
                         last_notify
                             .safe_lock(|s| {
                                 let _ = s.insert(msg.clone());
                             })
                             .unwrap();
 
-                        handle_result!(_tx_status, tx_sv1_notify.send(msg).await);
+                        handle_result!(tx_status, tx_sv1_notify.send(msg).await);
 
                         // Flush stale jobs from job_mapper (aka retain all values greater than
                         // this job_id)

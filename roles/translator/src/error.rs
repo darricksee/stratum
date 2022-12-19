@@ -20,7 +20,7 @@ pub enum ChannelSendError<'a> {
         async_channel::SendError<roles_logic_sv2::mining_sv2::SubmitSharesExtended<'a>>,
     ),
     SetNewPrevHash(async_channel::SendError<roles_logic_sv2::mining_sv2::SetNewPrevHash<'a>>),
-    Notify(async_channel::SendError<Notify>),
+    Notify(async_channel::SendError<Notify<'a>>),
 }
 
 #[derive(Debug)]
@@ -47,7 +47,7 @@ pub enum Error<'a> {
     RolesSv2Logic(roles_logic_sv2::errors::Error),
     UpstreamIncoming(roles_logic_sv2::errors::Error),
     /// SV1 protocol library error
-    V1Protocol(v1::error::Error),
+    V1Protocol(v1::error::Error<'a>),
     SubprotocolMining(String),
     // Locking Errors
     // PoisonLock(LockError<'a>),
@@ -132,8 +132,8 @@ impl<'a> From<toml::de::Error> for Error<'a> {
     }
 }
 
-impl<'a> From<v1::error::Error> for Error<'a> {
-    fn from(e: v1::error::Error) -> Self {
+impl<'a> From<v1::error::Error<'a>> for Error<'a> {
+    fn from(e: v1::error::Error<'a>) -> Self {
         Error::V1Protocol(e)
     }
 }
@@ -180,8 +180,8 @@ impl<'a> From<async_channel::SendError<roles_logic_sv2::mining_sv2::SetNewPrevHa
     }
 }
 
-impl<'a> From<async_channel::SendError<Notify>> for Error<'a> {
-    fn from(e: async_channel::SendError<Notify>) -> Self {
+impl<'a> From<async_channel::SendError<Notify<'a>>> for Error<'a> {
+    fn from(e: async_channel::SendError<Notify<'a>>) -> Self {
         Error::ChannelErrorSender(ChannelSendError::Notify(e))
     }
 }
