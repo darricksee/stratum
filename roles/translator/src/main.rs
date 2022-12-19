@@ -94,6 +94,7 @@ async fn main() {
         tx_sv2_new_ext_mining_job,
         proxy_config.min_extranonce2_size,
         tx_sv2_extranonce,
+        tx_status.clone(),
         target.clone(),
     )
     .await
@@ -115,11 +116,11 @@ async fn main() {
     }
 
     // Start receiving messages from the SV2 Upstream role
-    upstream_sv2::Upstream::parse_incoming(upstream.clone(), tx_status.clone());
+    upstream_sv2::Upstream::parse_incoming(upstream.clone());
 
     debug!("Finished starting upstream listener");
     // Start task handler to receive submits from the SV1 Downstream role once it connects
-    upstream_sv2::Upstream::handle_submit(upstream.clone(), tx_status.clone());
+    upstream_sv2::Upstream::handle_submit(upstream.clone());
 
     // Setup to store the latest SV2 `SetNewPrevHash` and `NewExtendedMiningJob` messages received
     // from the Upstream role before any Downstream role connects
@@ -134,6 +135,7 @@ async fn main() {
         rx_sv2_new_ext_mining_job,
         next_mining_notify,
         tx_sv1_notify,
+        tx_status.clone(),
         last_notify.clone(),
     )
     .start();

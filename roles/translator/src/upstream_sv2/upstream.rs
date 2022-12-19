@@ -116,6 +116,9 @@ pub struct Upstream {
     /// used by the `Downstream` and sent to the Downstream role in a SV2 `mining.subscribe`
     /// response message. Passed to the `Downstream` on connection creation.
     tx_sv2_extranonce: Sender<ExtendedExtranonce>,
+    /// This allows the upstream threads to be able to communicate back to the main thread its
+    /// current status.
+    tx_status: Sender<Status<'static>>,
     /// The first `target` is received by the Upstream role in the SV2
     /// `OpenExtendedMiningChannelSuccess` message, then updated periodically via SV2 `SetTarget`
     /// messages. Passed to the `Downstream` on connection creation and sent to the Downstream role
@@ -143,6 +146,7 @@ impl Upstream {
         tx_sv2_new_ext_mining_job: Sender<NewExtendedMiningJob<'static>>,
         min_extranonce_size: u16,
         tx_sv2_extranonce: Sender<ExtendedExtranonce>,
+        tx_status: Sender<Status<'static>>,
         target: Arc<Mutex<Vec<u8>>>,
     ) -> ProxyResult<'static, Arc<Mutex<Self>>> {
         // Connect to the SV2 Upstream role retry connection every 5 seconds.
@@ -187,6 +191,7 @@ impl Upstream {
             job_id: None,
             min_extranonce_size,
             tx_sv2_extranonce,
+            tx_status,
             target,
             current_job: Job::Void,
         })))
@@ -261,7 +266,7 @@ impl Upstream {
 
     /// Parses the incoming SV2 message from the Upstream role and routes the message to the
     /// appropriate handler.
-    pub fn parse_incoming(self_: Arc<Mutex<Self>>, tx_status: Sender<Status>) {
+    pub fn parse_incoming(self_: Arc<Mutex<Self>>) {
         task::spawn(async move {
             loop {
                 // Waiting to receive a message from the SV2 Upstream role
@@ -380,7 +385,9 @@ impl Upstream {
                             "TERMINATING: Error handling pool role message: {:?}",
                             status
                         );
-                        let _ = tx_status.send(status).await;
+                        let sender = self_.safe_lock(|s| s.tx_status.clone()).unwrap();
+                        sender.send(status).await.unwrap();
+
                         break;
                     }
                 }
@@ -390,7 +397,7 @@ impl Upstream {
 
     /// Receives a new SV2 `SubmitSharesExtended` message, checks that the submission target meets
     /// the expected (TODO), and sends to the Upstream role.
-    pub fn handle_submit(self_: Arc<Mutex<Self>>, _tx_status: Sender<Status>) {
+    pub fn handle_submit(self_: Arc<Mutex<Self>>) {
         // TODO
         // check if submit meet the upstream target and if so send back (upstream target will
         // likely be not the same of downstream target)
@@ -575,7 +582,7 @@ impl ParseUpstreamMiningMessages<Downstream, NullDownstreamMiningSelector, NoRou
     /// role in a SV1 `mining.subscribe` message response.
     fn handle_open_extended_mining_channel_success(
         &mut self,
-        m: OpenExtendedMiningChannelSuccess,
+        m: roles_logic_sv2::mining_sv2::OpenExtendedMiningChannelSuccess,
     ) -> Result<SendTo<Downstream>, Error> {
         if self.min_extranonce_size < m.extranonce_size {
             return Err(Error::InvalidExtranonceSize(
