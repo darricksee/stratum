@@ -23,7 +23,7 @@ use roles_logic_sv2::{
     },
     mining_sv2::{
         ExtendedExtranonce, Extranonce, NewExtendedMiningJob, OpenExtendedMiningChannel,
-        OpenExtendedMiningChannelSuccess, SetNewPrevHash, SubmitSharesExtended,
+        SetNewPrevHash, SubmitSharesExtended,
     },
     parsers::Mining,
     routing_logic::{CommonRoutingLogic, MiningRoutingLogic, NoRouting},
@@ -589,13 +589,7 @@ impl ParseUpstreamMiningMessages<Downstream, NullDownstreamMiningSelector, NoRou
         debug!("Up: Handling OpenExtendedMiningChannelSuccess: {:?}", &m);
         self.channel_id = Some(m.channel_id);
         self.extranonce_prefix = Some(m.extranonce_prefix.to_vec());
-        let m = Mining::OpenExtendedMiningChannelSuccess(OpenExtendedMiningChannelSuccess {
-            request_id: m.request_id,
-            channel_id: m.channel_id,
-            target: m.target.into_static(),
-            extranonce_size: m.extranonce_size,
-            extranonce_prefix: m.extranonce_prefix.into_static(),
-        });
+        let m = Mining::OpenExtendedMiningChannelSuccess(m.into_static());
         Ok(SendTo::None(Some(m)))
     }
 
@@ -711,18 +705,7 @@ impl ParseUpstreamMiningMessages<Downstream, NullDownstreamMiningSelector, NoRou
             }
         };
 
-        let message = Mining::NewExtendedMiningJob(NewExtendedMiningJob {
-            // Extended channel identifier, stable for whole connection lifetime. Used for broadcasting new
-            // jobs by the connection
-            channel_id: m.channel_id,
-            job_id: m.job_id,
-            future_job: m.future_job, // Maybe hard code to false for demo
-            version: m.version,
-            version_rolling_allowed: m.version_rolling_allowed,
-            merkle_path: m.merkle_path.clone().into_static(),
-            coinbase_tx_prefix: m.coinbase_tx_prefix.clone().into_static(),
-            coinbase_tx_suffix: m.coinbase_tx_suffix.clone().into_static(),
-        });
+        let message = Mining::NewExtendedMiningJob(m.into_static());
 
         info!("Up: New Extended Mining Job");
         debug!("Up: Handling NewExtendedMiningJob: {:?}", &message);
@@ -756,16 +739,7 @@ impl ParseUpstreamMiningMessages<Downstream, NullDownstreamMiningSelector, NoRou
             }
             Job::WithJobAndPrevHash(_, _) => todo!(),
         };
-        let message = Mining::SetNewPrevHash(SetNewPrevHash {
-            // Channel identifier, stable for whole connection lifetime. Used for broadcasting new
-            // jobs by the connection. Can be extended of standard channel (always extended for SV1
-            // Translator Proxy)
-            channel_id: m.channel_id,
-            job_id: m.job_id,
-            prev_hash: m.prev_hash.clone().into_static(),
-            min_ntime: m.min_ntime,
-            nbits: m.nbits,
-        });
+        let message = Mining::SetNewPrevHash(m.into_static());
 
         info!("Up: Set New Prev Hash");
         debug!("Up: Handling SetNewPrevHash: {:?}", &message);
@@ -795,10 +769,7 @@ impl ParseUpstreamMiningMessages<Downstream, NullDownstreamMiningSelector, NoRou
         &mut self,
         m: roles_logic_sv2::mining_sv2::SetTarget,
     ) -> Result<roles_logic_sv2::handlers::mining::SendTo<Downstream>, Error> {
-        let m = roles_logic_sv2::mining_sv2::SetTarget {
-            channel_id: m.channel_id,
-            maximum_target: m.maximum_target.into_static(),
-        };
+        let m = m.into_static();
 
         info!("Up: Updating Target to: {:?}", &m.maximum_target);
         debug!("Up: Handling SetTarget: {:?}", &m);
