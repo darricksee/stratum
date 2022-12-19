@@ -96,7 +96,11 @@ impl Display for Error {
                 id
             ),
             InvalidExtranonceSize(required_min, requested) => {
-                write!(f, "Invalid extranonce size: required min {}, requested {}", required_min, requested)
+                write!(
+                    f,
+                    "Invalid extranonce size: required min {}, requested {}",
+                    required_min, requested
+                )
             },
             NoMoreExtranonces => write!(f, "No more extranonces"),
             JobIsNotFutureButPrevHashNotPresent => write!(f, "A non future job always expect a previous new prev hash"),

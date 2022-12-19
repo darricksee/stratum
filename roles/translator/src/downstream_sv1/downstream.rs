@@ -1,5 +1,6 @@
 use crate::{downstream_sv1, ProxyResult};
 use async_channel::{bounded, Receiver, Sender};
+use async_std::task::JoinHandle;
 use async_std::{
     io::BufReader,
     net::{TcpListener, TcpStream},
@@ -233,6 +234,7 @@ impl Downstream {
         mut extended_extranonce: ExtendedExtranonce,
         last_notify: Arc<Mutex<Option<server_to_client::Notify<'static>>>>,
         target: Arc<Mutex<Vec<u8>>>,
+        tx_status: Sender<Status>,
     ) {
         task::spawn(async move {
             let downstream_listener = TcpListener::bind(downstream_addr).await.unwrap();

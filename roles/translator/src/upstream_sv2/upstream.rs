@@ -1,3 +1,5 @@
+use crate::error::Error::{BadCliArgs, RolesSv2Logic};
+use crate::status::{Component, State, Status};
 use crate::{
     downstream_sv1::Downstream,
     error::Error::{CodecNoise, UpstreamIncoming},
@@ -6,10 +8,12 @@ use crate::{
     ProxyResult,
 };
 use async_channel::{Receiver, Sender};
+use async_std::task::JoinHandle;
 use async_std::{net::TcpStream, task};
 use binary_sv2::u256_from_int;
 use codec_sv2::{Frame, HandshakeRole, Initiator};
 use network_helpers::Connection;
+use roles_logic_sv2::errors::Error;
 use roles_logic_sv2::{
     bitcoin::{
         hashes::{sha256d::Hash as DHash, Hash},
@@ -32,9 +36,7 @@ use roles_logic_sv2::{
     Error,
 };
 use std::{net::SocketAddr, sync::Arc, thread::sleep, time::Duration};
-use async_std::task::JoinHandle;
 use tracing::{debug, error, info, trace, warn};
-use roles_logic_sv2::errors::Error;
 
 /// Represents the currently active mining job being worked on.
 #[allow(dead_code)]
