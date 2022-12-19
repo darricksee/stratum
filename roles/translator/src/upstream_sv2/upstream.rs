@@ -33,6 +33,7 @@ use roles_logic_sv2::{
 };
 use std::{net::SocketAddr, sync::Arc, thread::sleep, time::Duration};
 use tracing::{debug, error, info, trace, warn};
+use crate::error::Error::UpstreamIncomingError;
 
 /// Represents the currently active mining job being worked on.
 #[allow(dead_code)]
