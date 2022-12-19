@@ -20,6 +20,7 @@ use super::SendTo_;
 use crate::utils::Mutex;
 use std::{fmt::Debug as D, sync::Arc};
 use tracing::debug;
+use crate::handlers::SendTo_::RelayNewMessage;
 
 pub type SendTo<Remote> = SendTo_<Mining<'static>, Remote>;
 

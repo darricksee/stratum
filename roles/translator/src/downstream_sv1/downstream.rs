@@ -233,7 +233,6 @@ impl Downstream {
         mut extended_extranonce: ExtendedExtranonce,
         last_notify: Arc<Mutex<Option<server_to_client::Notify<'static>>>>,
         target: Arc<Mutex<Vec<u8>>>,
-        _tx_status: Sender<Status>,
     ) {
         task::spawn(async move {
             let downstream_listener = TcpListener::bind(downstream_addr).await.unwrap();

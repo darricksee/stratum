@@ -32,7 +32,9 @@ use roles_logic_sv2::{
     Error,
 };
 use std::{net::SocketAddr, sync::Arc, thread::sleep, time::Duration};
+use async_std::task::JoinHandle;
 use tracing::{debug, error, info, trace, warn};
+use roles_logic_sv2::errors::Error;
 
 /// Represents the currently active mining job being worked on.
 #[allow(dead_code)]
@@ -260,7 +262,7 @@ impl Upstream {
 
     /// Parses the incoming SV2 message from the Upstream role and routes the message to the
     /// appropriate handler.
-    pub fn parse_incoming(self_: Arc<Mutex<Self>>, tx_status: Sender<Status>) {
+    pub fn parse_incoming(self_: Arc<Mutex<Self>>, tx_status: Sender<Status>) -> JoinHandle<()> {
         task::spawn(async move {
             loop {
                 // Waiting to receive a message from the SV2 Upstream role
@@ -384,12 +386,12 @@ impl Upstream {
                     }
                 }
             }
-        });
+        })
     }
 
     /// Receives a new SV2 `SubmitSharesExtended` message, checks that the submission target meets
     /// the expected (TODO), and sends to the Upstream role.
-    pub fn handle_submit(self_: Arc<Mutex<Self>>, _tx_status: Sender<Status>) {
+    pub fn handle_submit(self_: Arc<Mutex<Self>>, _tx_status: Sender<Status>) -> JoinHandle<()> {
         // TODO
         // check if submit meet the upstream target and if so send back (upstream target will
         // likely be not the same of downstream target)
@@ -437,7 +439,7 @@ impl Upstream {
                     .unwrap();
                 sender.send(frame).await.unwrap();
             }
-        });
+        })
     }
 
     fn _is_contained_in_upstream_target(&self, _share: SubmitSharesExtended) -> bool {

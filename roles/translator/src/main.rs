@@ -16,12 +16,12 @@ const SELF_EXTRNONCE_LEN: usize = 2;
 use async_channel::{bounded, unbounded, Receiver, Sender};
 use std::{
     net::{IpAddr, SocketAddr},
+    pin::Pin,
     str::FromStr,
     sync::Arc,
     thread::sleep,
     time::Duration,
 };
-
 use v1::server_to_client;
 
 use crate::status::State;
@@ -115,12 +115,15 @@ async fn main() {
         }
     }
 
+    // Create a new vec to store all the JoinHandles for the spawned tasks
+    let mut join_handles : Vec<JoinHandle<()>> = vec![];
+
     // Start receiving messages from the SV2 Upstream role
-    upstream_sv2::Upstream::parse_incoming(upstream.clone(), tx_status.clone());
+    join_handles.push(upstream_sv2::Upstream::parse_incoming(upstream.clone(), tx_status.clone()));
 
     debug!("Finished starting upstream listener");
     // Start task handler to receive submits from the SV1 Downstream role once it connects
-    upstream_sv2::Upstream::handle_submit(upstream.clone(), tx_status.clone());
+    join_handles.push(upstream_sv2::Upstream::handle_submit(upstream.clone(), tx_status.clone()));
 
     // Setup to store the latest SV2 `SetNewPrevHash` and `NewExtendedMiningJob` messages received
     // from the Upstream role before any Downstream role connects
@@ -137,7 +140,7 @@ async fn main() {
         tx_sv1_notify,
         last_notify.clone(),
     )
-    .start(tx_status.clone());
+    .start();
 
     // Format `Downstream` connection address
     let downstream_addr = SocketAddr::new(
@@ -158,9 +161,7 @@ async fn main() {
                 error!("Failed to receive the extended extranonce from the upstream - retrying in 1s: {}", e);
                 sleep(Duration::from_secs(1));
                 if times > 5 {
-                    panic!(
-                        "Failed to receive the extended extranonce from the upstream - quitting"
-                    );
+                    panic!("Failed to receive the extended extranonce from the upstream - quitting");
                 }
             }
         }
@@ -174,7 +175,6 @@ async fn main() {
         extended_extranonce,
         last_notify,
         target,
-        tx_status.clone(),
     );
 
     // Check all tasks if is_finished() is true, if so exit
@@ -191,4 +191,6 @@ async fn main() {
             }
         }
     }
+    ));
+
 }
