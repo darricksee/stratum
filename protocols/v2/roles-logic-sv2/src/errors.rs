@@ -117,13 +117,6 @@ impl Display for Error {
             NotFoundChannelId => write!(f, "No downstream has been registred for this channel id"),
             NoValidJob => write!(f, "Impossible to create a standard job for channelA cause no valid job has been received from upstream yet"),
             NoTemplateForId => write!(f, "Impossible a template for the required job id"),
-            InvalidExtranonceSize(required_min, requested) => {
-                write!(
-                    f,
-                    "Invalid extranonce size: required min {}, requested {}",
-                    required_min, requested
-                )
-            }
         }
     }
 }

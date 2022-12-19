@@ -1,7 +1,7 @@
 use crate::{
     downstream_sv1::Downstream,
+    error::Error::{CodecNoise, UpstreamIncoming},
     status::{State, Status},
-    error::Error::{CodecNoise, RolesSv2Logic, UpstreamIncoming},
     upstream_sv2::{EitherFrame, Message, StdFrame, UpstreamConnection},
     ProxyResult,
 };
@@ -33,7 +33,6 @@ use roles_logic_sv2::{
 };
 use std::{net::SocketAddr, sync::Arc, thread::sleep, time::Duration};
 use tracing::{debug, error, info, trace, warn};
-use crate::error::Error::UpstreamIncomingError;
 
 /// Represents the currently active mining job being worked on.
 #[allow(dead_code)]
