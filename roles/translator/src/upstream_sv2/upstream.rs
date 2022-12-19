@@ -1,19 +1,15 @@
-use crate::error::Error::{BadCliArgs, RolesSv2Logic};
-use crate::status::{Component, State, Status};
 use crate::{
     downstream_sv1::Downstream,
-    error::Error::{CodecNoise, UpstreamIncoming},
     status::{State, Status},
+    error::Error::{BadCliArgs, CodecNoise, RolesSv2Logic, UpstreamIncoming},
     upstream_sv2::{EitherFrame, Message, StdFrame, UpstreamConnection},
     ProxyResult,
 };
 use async_channel::{Receiver, Sender};
-use async_std::task::JoinHandle;
 use async_std::{net::TcpStream, task};
 use binary_sv2::u256_from_int;
 use codec_sv2::{Frame, HandshakeRole, Initiator};
 use network_helpers::Connection;
-use roles_logic_sv2::errors::Error;
 use roles_logic_sv2::{
     bitcoin::{
         hashes::{sha256d::Hash as DHash, Hash},
@@ -264,7 +260,7 @@ impl Upstream {
 
     /// Parses the incoming SV2 message from the Upstream role and routes the message to the
     /// appropriate handler.
-    pub fn parse_incoming(self_: Arc<Mutex<Self>>, tx_status: Sender<Status>) -> JoinHandle<()> {
+    pub fn parse_incoming(self_: Arc<Mutex<Self>>, tx_status: Sender<Status>) {
         task::spawn(async move {
             loop {
                 // Waiting to receive a message from the SV2 Upstream role
@@ -388,12 +384,12 @@ impl Upstream {
                     }
                 }
             }
-        })
+        });
     }
 
     /// Receives a new SV2 `SubmitSharesExtended` message, checks that the submission target meets
     /// the expected (TODO), and sends to the Upstream role.
-    pub fn handle_submit(self_: Arc<Mutex<Self>>, _tx_status: Sender<Status>) -> JoinHandle<()> {
+    pub fn handle_submit(self_: Arc<Mutex<Self>>, _tx_status: Sender<Status>) {
         // TODO
         // check if submit meet the upstream target and if so send back (upstream target will
         // likely be not the same of downstream target)
@@ -441,7 +437,7 @@ impl Upstream {
                     .unwrap();
                 sender.send(frame).await.unwrap();
             }
-        })
+        });
     }
 
     fn _is_contained_in_upstream_target(&self, _share: SubmitSharesExtended) -> bool {

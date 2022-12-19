@@ -1,6 +1,5 @@
 use async_channel::{Receiver, Sender};
 use async_std::task;
-use async_std::task::JoinHandle;
 use roles_logic_sv2::{
     mining_sv2::{ExtendedExtranonce, NewExtendedMiningJob, SetNewPrevHash, SubmitSharesExtended},
     utils::{Id, Mutex},
@@ -9,7 +8,6 @@ use std::{collections::HashMap, sync::Arc};
 use v1::{client_to_server::Submit, server_to_client};
 
 use super::next_mining_notify::NextMiningNotify;
-use crate::status::Status;
 use crate::{status::Status, Error, ProxyResult};
 use tracing::{debug, error};
 
