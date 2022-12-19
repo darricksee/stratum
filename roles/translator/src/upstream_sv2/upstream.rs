@@ -1,7 +1,7 @@
 use crate::{
     downstream_sv1::Downstream,
     status::{State, Status},
-    error::Error::{BadCliArgs, CodecNoise, RolesSv2Logic, UpstreamIncoming},
+    error::Error::{CodecNoise, RolesSv2Logic, UpstreamIncoming},
     upstream_sv2::{EitherFrame, Message, StdFrame, UpstreamConnection},
     ProxyResult,
 };

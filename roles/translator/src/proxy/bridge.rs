@@ -142,7 +142,7 @@ impl Bridge {
     /// that before every received `SetNewPrevHash`, a `NewExtendedMiningJob` with a
     /// corresponding `job_id` has already been received. If this is not the case, an error has
     /// occurred on the Upstream pool role and the connection will close.
-    fn handle_new_prev_hash(self_: Arc<Mutex<Self>>, tx_status: Sender<Status>) {
+    fn handle_new_prev_hash(self_: Arc<Mutex<Self>>, _tx_status: Sender<Status>) {
         debug!("Starting handle_new_prev_hash task");
         task::spawn(async move {
             loop {
@@ -252,7 +252,7 @@ impl Bridge {
     /// connection will close.
     fn handle_new_extended_mining_job(
         self_: Arc<Mutex<Self>>,
-        tx_status: Sender<Status>,
+        _tx_status: Sender<Status>,
     ) {
         debug!("Starting handle_new_extended_mining_job task");
         task::spawn(async move {
