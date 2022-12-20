@@ -8,7 +8,7 @@ use std::{collections::HashMap, sync::Arc};
 use v1::{client_to_server::Submit, server_to_client};
 
 use super::next_mining_notify::NextMiningNotify;
-use crate::{status::Status, Error, ProxyResult};
+use crate::{handle_result, status::Status, Error, ProxyResult};
 use tracing::{debug, error};
 
 /// Bridge between the SV2 `Upstream` and SV1 `Downstream` responsible for the following messaging
@@ -97,19 +97,29 @@ impl Bridge {
     /// Receives a SV1 `mining.submit` message from the `Downstream`, translates it to a SV2
     /// `SubmitSharesExtended` message, and sends it to the `Upstream`.
     fn handle_downstream_share_submission(self_: Arc<Mutex<Self>>) {
-        let rx_sv1_submit = self_.safe_lock(|s| s.rx_sv1_submit.clone()).unwrap();
-        let tx_sv2_submit_shares_ext = self_
-            .safe_lock(|s| s.tx_sv2_submit_shares_ext.clone())
+        let (rx_sv1_submit, tx_sv2_submit_shares_ext, tx_status) = self_
+            .safe_lock(|s| {
+                (
+                    s.rx_sv1_submit.clone(),
+                    s.tx_sv2_submit_shares_ext.clone(),
+                    s.tx_status.clone(),
+                )
+            })
             .unwrap();
         debug!("Starting handle_downstream_share_submission task");
         task::spawn(async move {
             loop {
-                let (sv1_submit, extranonce) = rx_sv1_submit.clone().recv().await.unwrap();
+                let (sv1_submit, extranonce) =
+                    handle_result!(tx_status, rx_sv1_submit.clone().recv().await);
                 let channel_sequence_id =
                     self_.safe_lock(|s| s.channel_sequence_id.next()).unwrap() - 1;
-                let sv2_submit: SubmitSharesExtended =
-                    Self::translate_submit(channel_sequence_id, sv1_submit, &extranonce).unwrap();
-                tx_sv2_submit_shares_ext.send(sv2_submit).await.unwrap();
+
+                let sv2_submit = handle_result!(
+                    tx_status,
+                    Self::translate_submit(channel_sequence_id, sv1_submit, extranonce)
+                );
+
+                handle_result!(tx_status, tx_sv2_submit_shares_ext.send(sv2_submit).await);
             }
         });
     }
@@ -118,12 +128,24 @@ impl Bridge {
     fn translate_submit(
         channel_sequence_id: u32,
         sv1_submit: Submit,
-        extranonce_1: &ExtendedExtranonce,
+        extranonce_1: ExtendedExtranonce,
     ) -> ProxyResult<'static, SubmitSharesExtended<'static>> {
-        let extranonce_vec: Vec<u8> = sv1_submit.extra_nonce2.0.to_vec();
-        let extranonce = extranonce_1
-            .without_upstream_part(Some(extranonce_vec.try_into().unwrap()))
-            .unwrap();
+        let extranonce_vec: Vec<u8> = sv1_submit.extra_nonce2.clone().into();
+        let extranonce = if let Ok(extranonce_vec) = extranonce_vec.try_into() {
+            match extranonce_1.without_upstream_part(Some(extranonce_vec)) {
+                Some(val) => val,
+                None => {
+                    return Err(Error::SubprotocolMining(
+                        "Failed to remove upstream part of extranonce".to_string(),
+                    ));
+                }
+            }
+        } else {
+            return Err(Error::SubprotocolMining(format!(
+                "Failed to convert bytes to Extranonce: bytes length = {:?}",
+                sv1_submit.extra_nonce2.len()
+            )));
+        };
 
         let version = match sv1_submit.version_bits {
             Some(vb) => vb.0,
@@ -137,7 +159,7 @@ impl Bridge {
             nonce: sv1_submit.nonce.0,
             ntime: sv1_submit.time.0,
             version,
-            extranonce: extranonce.try_into().unwrap(),
+            extranonce: extranonce.into(),
         })
     }
 
@@ -152,11 +174,11 @@ impl Bridge {
         task::spawn(async move {
             loop {
                 // Receive `SetNewPrevHash` from `Upstream`
-                let rx_sv2_set_new_prev_hash = self_
-                    .safe_lock(|r| r.rx_sv2_set_new_prev_hash.clone())
+                let (rx_sv2_set_new_prev_hash, tx_status) = self_
+                    .safe_lock(|r| (r.rx_sv2_set_new_prev_hash.clone(), r.tx_status.clone()))
                     .unwrap();
                 let sv2_set_new_prev_hash: SetNewPrevHash =
-                    rx_sv2_set_new_prev_hash.clone().recv().await.unwrap();
+                    handle_result!(tx_status, rx_sv2_set_new_prev_hash.clone().recv().await);
                 debug!(
                     "handle_new_prev_hash job_id: {:?}",
                     &sv2_set_new_prev_hash.job_id
@@ -206,6 +228,7 @@ impl Bridge {
                             .unwrap()
                     })
                     .unwrap();
+
                 debug!(
                     "handle_new_prev_hash mining.notify to send: {:?}",
                     &sv1_notify_msg
@@ -223,13 +246,15 @@ impl Bridge {
                     // `last_notify` logic here is only relevant for SV2 `SetNewPrevHash` and
                     // `NewExtendedMiningJob` messages received **before** a Downstream role
                     // connects
-                    let last_notify = self_.safe_lock(|s| s.last_notify.clone()).unwrap();
+                    let (last_notify, tx_status) = self_
+                        .safe_lock(|s| (s.last_notify.clone(), s.tx_status.clone()))
+                        .unwrap();
                     last_notify
                         .safe_lock(|s| {
                             let _ = s.insert(msg.clone());
                         })
                         .unwrap();
-                    tx_sv1_notify.send(msg).await.unwrap();
+                    handle_result!(tx_status, tx_sv1_notify.send(msg).await);
 
                     // Flush stale jobs from job_mapper (aka retain all values greater than
                     // this job_id)
@@ -260,11 +285,12 @@ impl Bridge {
         task::spawn(async move {
             loop {
                 // Receive `NewExtendedMiningJob` from `Upstream`
-                let rx_sv2_new_ext_mining_job = self_
-                    .safe_lock(|r| r.rx_sv2_new_ext_mining_job.clone())
+                let (rx_sv2_new_ext_mining_job, tx_status) = self_
+                    .safe_lock(|r| (r.rx_sv2_new_ext_mining_job.clone(), r.tx_status.clone()))
                     .unwrap();
                 let sv2_new_extended_mining_job: NewExtendedMiningJob =
-                    rx_sv2_new_ext_mining_job.clone().recv().await.unwrap();
+                    handle_result!(tx_status, rx_sv2_new_ext_mining_job.clone().recv().await);
+
                 debug!(
                     "handle_new_extended_mining_job job_id: {:?}",
                     &sv2_new_extended_mining_job.job_id
@@ -320,13 +346,16 @@ impl Bridge {
                             "handle_new_extended_mining_job sending mining.notify to Downstream"
                         );
                         // TODO: handle the last_notify using the job_mapper instead
-                        let last_notify = self_.safe_lock(|s| s.last_notify.clone()).unwrap();
+                        let (last_notify, tx_status) = self_
+                            .safe_lock(|s| (s.last_notify.clone(), s.tx_status.clone()))
+                            .unwrap();
                         last_notify
                             .safe_lock(|s| {
                                 let _ = s.insert(msg.clone());
                             })
                             .unwrap();
-                        tx_sv1_notify.send(msg).await.unwrap();
+
+                        handle_result!(tx_status, tx_sv1_notify.send(msg).await);
 
                         // Flush stale jobs from job_mapper (aka retain all values greater than
                         // this job_id)
