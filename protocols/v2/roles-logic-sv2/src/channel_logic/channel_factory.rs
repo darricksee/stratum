@@ -817,6 +817,20 @@ impl PoolChannelFactory {
         self.inner.on_new_prev_hash(new_prev_hash)?;
         Ok(job_id)
     }
+    pub fn calculate_block_subsidy(height: u32) -> u64 {
+        let mut subsidy = 50 * 100_000_000; // 100,000,000 sats in 1 BTC
+
+        let halvings = height/210000;
+
+        if halvings >= 64 {
+            return 0;
+        } else {
+            for _ in 0..halvings {
+                subsidy >>= 1;
+            }
+        }
+        subsidy
+    }
 
     pub fn on_new_template(
         &mut self,
@@ -1269,6 +1283,32 @@ mod test {
     }
 
     use bitcoin::TxOut;
+    use rand::Rng;
+
+    #[test]
+    fn test_calculate_block_subsidy() {
+        // near current height
+        let mut height = 773256;
+        assert_eq!(PoolChannelFactory::calculate_block_subsidy(height), 625000000);
+
+        // The next halving is the 4th - test all the halvings and their boundaries
+        for halving in 4..=63 {
+            height = 210000 * halving;
+            assert_eq!(PoolChannelFactory::calculate_block_subsidy(height), 5_000_000_000 / (1 << halving));
+
+            let mut rng = rand::thread_rng();
+
+            // pick a random height before the next halving
+            height = (210000 * halving) - rng.gen_range(1..210000);
+            assert_eq!(PoolChannelFactory::calculate_block_subsidy(height), 5_000_000_000 / (1 << (halving - 1)));
+
+        }
+
+        // this halving goes to 0 subsidy :(
+        height = 210000 * 64;
+        assert_eq!(PoolChannelFactory::calculate_block_subsidy(height), 0);
+
+    }
 
     #[test]
     fn test_complete_mining_round() {

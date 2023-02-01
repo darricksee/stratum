@@ -1,3 +1,5 @@
+use alloc::format;
+use alloc::string::{String, ToString};
 #[cfg(not(feature = "with_serde"))]
 use alloc::vec::Vec;
 #[cfg(not(feature = "with_serde"))]
@@ -153,6 +155,41 @@ impl<'d> GetSize for NewTemplate<'d> {
     }
 }
 
+impl<'a> NewTemplate<'a> {
+
+    /// Returns the height of the block based on the coinbase_prefix
+    /// The coinbase_prefix is a vector of bytes that contains the height of the block
+    /// The height is stored in little endian
+    /// This reverses the order of the int strings, then
+    /// converts each to hex and then converts the vector to a string
+    /// The string is then converted to a u32 and returned
+    pub fn get_height(&self) -> u32 {
+        let height = self.coinbase_prefix.to_vec();
+
+        //Convert each element to hex
+        let mut height_hex: Vec<String> = height
+            .iter()
+            //.map(|x| format!("{:x?}", x))
+            .map(|x| format!("{:02x?}", x))
+            .rev().collect();
+
+        // if the last element of height_hex starts with a 0 remove it
+        // because 0x89cc0b != 0x89ccb
+        let mut last_element :String = height_hex.pop().unwrap();
+        if last_element.starts_with("0") {
+            last_element = last_element[1..].to_string();
+        }
+        height_hex.push(last_element);
+
+        //Convert the vector to a string
+        let height_hex_st: String = height_hex.join("");
+
+        //Convert hex string to u32
+        u32::from_str_radix(&height_hex_st, 16).unwrap()
+    }
+
+}
+
 #[cfg(feature = "with_serde")]
 impl<'a> NewTemplate<'a> {
     pub fn into_static(self) -> NewTemplate<'static> {
@@ -163,6 +200,81 @@ impl<'a> NewTemplate<'a> {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use alloc::vec::Vec;
+    use core::convert::TryInto;
+    use super::*;
+    use binary_sv2::{Seq0255, Seq064K, B064K, U256};
+
+    #[test]
+    fn test_get_height() {
+        let mut coinbase_prefix = Vec::new();
+
+        // https://blockstream.info/tx/eede27543f086abd612b87096a7216229d4c736d39bbdfd4fefc1455f427997f
+        coinbase_prefix.push(18);
+        coinbase_prefix.push(158);
+        coinbase_prefix.push(11);
+
+        let temp = create_new_template(coinbase_prefix.clone().try_into().unwrap());
+
+        // 761362 -> 0xB9E12
+        // 18,     158,   11
+        // 0x12,   0x9E,  0xB
+        assert_eq!(temp.get_height(), 761362);
+
+        //  -> 773256 -> 0xBCC88
+        coinbase_prefix.clear();
+
+        // https://blockstream.info/block/00000000000000000005d02cefd2336c605b03736db8c0f3cbd6881c723f0a2f        coinbase_prefix.push(8); // 0x08
+        coinbase_prefix.push(8); // 0x08
+        coinbase_prefix.push(200); // 0xc8
+        coinbase_prefix.push(188); // 0xbc
+
+        let temp = create_new_template(coinbase_prefix.clone().try_into().unwrap());
+
+        assert_eq!(temp.get_height(), 773256);
+
+
+        // 773257 -> 89cc0b
+        coinbase_prefix.clear();
+        coinbase_prefix.push(137); // 0x89
+        coinbase_prefix.push(204); // 0xcc
+        coinbase_prefix.push(11); // 0x0b
+
+        let temp = create_new_template(coinbase_prefix.clone().try_into().unwrap());
+
+        assert_eq!(temp.get_height(), 773257);
+
+        // 626507 -> 0x98f4b
+        coinbase_prefix.clear();
+
+        //https://blockstream.info/block/00000000000000000004bc9fc532c790f32a5170fa9461110319d1c1b1c2e2d3?expand        coinbase_prefix.push(11); // 0x0b
+        coinbase_prefix.push(11); // 0x0b
+        coinbase_prefix.push(244); // 0xf4
+        coinbase_prefix.push(152); // 0x98
+
+        let temp = create_new_template(coinbase_prefix.clone().try_into().unwrap());
+
+        assert_eq!(temp.get_height(), 626507);
+    }
+
+    fn create_new_template(coinbase_prefix: B0255) -> NewTemplate {
+        NewTemplate {
+            template_id: 1,
+            future_template: true,
+            version: 1,
+            coinbase_tx_version: 1,
+            coinbase_prefix,
+            coinbase_tx_input_sequence: 1,
+            coinbase_tx_value_remaining: 1,
+            coinbase_tx_outputs_count: 0,
+            coinbase_tx_outputs: Vec::new().try_into().unwrap(),
+            coinbase_tx_locktime: 1,
+            merkle_path: Vec::new().try_into().unwrap(),
+        }
+    }
+}
 #[cfg(feature = "prop_test")]
 use quickcheck::{Arbitrary, Gen};
 
