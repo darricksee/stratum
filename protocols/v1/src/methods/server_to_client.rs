@@ -560,7 +560,7 @@ impl<'a> VersionRollingParams {
     pub fn new(version_rolling_mask: HexU32Be, version_rolling_min_bit_count: HexU32Be) -> Self {
         VersionRollingParams {
             version_rolling: true,
-            version_rolling_mask,
+            version_rolling_mask: HexU32Be(version_rolling_mask & 536862720),
             version_rolling_min_bit_count,
         }
     }

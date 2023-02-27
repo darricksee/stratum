@@ -4,6 +4,7 @@ use bitcoin_hashes::hex::{FromHex, ToHex};
 use byteorder::{BigEndian, ByteOrder, LittleEndian, WriteBytesExt};
 use serde_json::Value;
 use std::{convert::TryFrom, mem::size_of};
+use std::ops::BitAnd;
 
 /// Helper type that allows simple serialization and deserialization of byte vectors
 /// that are represented as hex strings in JSON.
@@ -85,6 +86,14 @@ impl TryFrom<&str> for HexU32Be {
     fn try_from(value: &str) -> Result<Self, Error<'static>> {
         let parsed_bytes: [u8; 4] = FromHex::from_hex(value)?;
         Ok(HexU32Be(u32::from_be_bytes(parsed_bytes)))
+    }
+}
+
+impl BitAnd<u32> for HexU32Be {
+    type Output = u32;
+
+    fn bitand(self, rhs: u32) -> Self::Output {
+        self.0 & rhs
     }
 }
 
