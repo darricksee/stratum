@@ -581,7 +581,7 @@ impl<'a> VersionRollingParams {
         if version_head_ok && version_tail_ok {
             Ok(VersionRollingParams {
                 version_rolling: true,
-                version_rolling_mask & 536862720,
+                version_rolling_mask: HexU32Be(version_rolling_mask & 536862720),
                 version_rolling_min_bit_count,
             })
         } else {
