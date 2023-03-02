@@ -3,8 +3,7 @@ use binary_sv2::{B032, U256};
 use bitcoin_hashes::hex::{FromHex, ToHex};
 use byteorder::{BigEndian, ByteOrder, LittleEndian, WriteBytesExt};
 use serde_json::Value;
-use std::{convert::TryFrom, mem::size_of};
-use std::ops::BitAnd;
+use std::{convert::TryFrom, mem::size_of, ops::BitAnd};
 
 /// Helper type that allows simple serialization and deserialization of byte vectors
 /// that are represented as hex strings in JSON.
